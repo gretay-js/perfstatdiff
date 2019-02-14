@@ -1,0 +1,10 @@
+(executable
+ (name perfstatdiff)
+ (libraries core csvfields)
+ (preprocess (pps ppx_jane)))
+
+(alias
+ (name DEFAULT)
+ (deps perfstatdiff.ml.pp))
+
+
