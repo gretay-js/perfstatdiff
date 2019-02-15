@@ -1,6 +1,6 @@
 open Core
 
-let verbose = false
+let verbose = ref false
 
 type t = {
   name : string;
@@ -19,13 +19,21 @@ let mk (v1:t) (v2:t) =
     rel = (v2.count /. v1.count)
   }
 
+let pr_int_or_float x =
+  let n = Float.iround_towards_zero_exn x in begin
+    if float_of_int n = x then
+      Int.to_string_hum ~delimiter:',' n
+    else
+      Float.to_string_hum ~delimiter:',' x
+  end
+
 let pr { name; base; change; abs; rel } =
   [
-    Float.to_string_hum ~delimiter:',' base.count;
+    pr_int_or_float base.count;
     base.variance;
-    Float.to_string_hum ~delimiter:',' change.count;
+    pr_int_or_float change.count;
     change.variance;
-    Float.to_string_hum ~delimiter:','  abs;
+    pr_int_or_float abs;
     Float.to_string_hum rel;
     name
   ]
@@ -59,10 +67,10 @@ let load file =
   let timestamp = List.hd_exn (List.hd_exn csv) in
   let csv =  List.tl_exn csv in
   let csv = Csvlib.Csv.trim csv in
-  if verbose then printf "Reading data from %s\nPerf run %s\n" file timestamp;
-  if verbose then Csvlib.Csv.print_readable csv;
+  if !verbose then printf "Reading data from %s\nPerf run %s\n" file timestamp;
+  if !verbose then Csvlib.Csv.print_readable csv;
   let data = List.filter_map csv ~f:row_to_t in
-  if verbose then List.iter data ~f:(fun x -> printf !"%{sexp:t}\n" x);
+  if !verbose then List.iter data ~f:(fun x -> printf !"%{sexp:t}\n" x);
   List.map data ~f:(fun t -> (t.name, t))
   |> Map.of_alist_exn (module String)
 
@@ -127,7 +135,8 @@ let print_readable csv =
       output_string "\n"
   ) csv
 
-let main file1 file2 outfile =
+let main file1 file2 outfile v =
+  if v then verbose := true;
   let merge ~key = function
     | `Right _ -> failwith (sprintf "Missing entry for %s in %s" key file1)
     | `Left _  -> failwith (sprintf "Missing entry for %s in %s" key file2)
@@ -138,7 +147,7 @@ let main file1 file2 outfile =
   let data = Map.merge d1 d2 ~f:merge in
   let list = List.rev (Map.data data) in
   let csv_out = add_headers file1 file2 (List.map ~f:pr list) in
-  if verbose then Csvlib.Csv.print_readable csv_out;
+  if !verbose then Csvlib.Csv.print_readable csv_out;
   print_readable csv_out;
   match outfile with
   | None -> ()
@@ -160,8 +169,9 @@ FILE1 and FILE2 are in CSV format."
       let%map_open file1 = anon ("FILE1" %: file)
       and file2 = anon ("FILE2" %: file)
       and outfile = flag "-o" (optional file) ~doc:"output csv filename"
+      and verbose = flag "-v" no_arg ~doc:" turns on verbose"
       in
-      fun () -> main file1 file2 outfile)
+      fun () -> main file1 file2 outfile verbose)
 
 
 let () = Command.run command
