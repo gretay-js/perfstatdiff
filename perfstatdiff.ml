@@ -38,18 +38,11 @@ let pr { name; base; change; abs; rel } =
     name
   ]
 
-let add_headers file1 file2 csv =
-  let headers =
-    [
-      file1;
-      "+-";
-      file2;
-      "+-";
-      "Difference";
-      "";
-      ""
-    ]
-  in
+let add_headers files csv =
+  let summary = ["Difference";"";""] in
+  let headers = List.rev
+                  (List.fold files ~init:summary
+                     ~f:(fun acc file -> file::"+-"::acc)) in
   headers::csv
 
 let row_to_t = function
@@ -135,18 +128,22 @@ let print_readable csv =
       output_string "\n"
   ) csv
 
-let main file1 file2 outfile v =
+let main files outfile v =
   if v then verbose := true;
-  let merge ~key = function
-    | `Right _ -> failwith (sprintf "Missing entry for %s in %s" key file1)
-    | `Left _  -> failwith (sprintf "Missing entry for %s in %s" key file2)
+  let merge d1 d2 ~key = function
+    | `Right _ -> failwith (sprintf "Missing entry for %s in %s" key d1)
+    | `Left _  -> failwith (sprintf "Missing entry for %s in %s" key d2)
     | `Both (v1, v2) -> Some (mk v1 v2)
   in
-  let d1 = load file1 in
-  let d2 = load file2 in
-  let data = Map.merge d1 d2 ~f:merge in
+  let d1 = load (List.hd files) in
+  let dothers = List.iter (List.tl files) ~f:(fun file -> load file) in
+  let data = List.foldi
+               dothers
+               ~init:d1
+               ~f:(fun i data d ->
+                 (Map.merge data d ~f:(merge data d2))) in
   let list = List.rev (Map.data data) in
-  let csv_out = add_headers file1 file2 (List.map ~f:pr list) in
+  let csv_out = add_headers files (List.map ~f:pr list) in
   if !verbose then Csvlib.Csv.print_readable csv_out;
   print_readable csv_out;
   match outfile with
@@ -166,12 +163,11 @@ let command =
 FILE1 and FILE2 are in CSV format."
     )
     Command.Let_syntax.(
-      let%map_open file1 = anon ("FILE1" %: file)
-      and file2 = anon ("FILE2" %: file)
+      let%map_open files = anon (sequence ("FILE" %: file))
       and outfile = flag "-o" (optional file) ~doc:"output csv filename"
       and verbose = flag "-v" no_arg ~doc:" turns on verbose"
       in
-      fun () -> main file1 file2 outfile verbose)
+      fun () -> main files outfile verbose)
 
 
 let () = Command.run command
