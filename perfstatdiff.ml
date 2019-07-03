@@ -17,7 +17,7 @@ type v = {
 let get_v ~base t =
   {
     abs = t.count -. base.count;
-    rel = t.count /. base.count;
+    rel = ((t.count -. base.count) *. 100.0) /. base.count;
   }
 
 
@@ -251,8 +251,9 @@ The first file in the arguments list is assumed to be the baseline.
 "
     )
     Command.Let_syntax.(
-      let%map_open files = anon (non_empty_sequence_as_list ("FILE" %: file))
-      and outfile = flag "-o" (optional file) ~doc:"output csv filename"
+      let%map_open files =
+        anon (non_empty_sequence_as_list ("FILE" %: Filename.arg_type))
+      and outfile = flag "-o" (optional Filename.arg_type) ~doc:"output csv filename"
       and v = flag "-v" no_arg ~doc:" verbose"
       and t = flag "-t" no_arg ~doc:" events are columns"
       and s = flag "-s" no_arg ~doc:" separate tables"
